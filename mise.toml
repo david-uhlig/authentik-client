@@ -1,0 +1,29 @@
+[tools]
+ruby = "3.3"
+
+[tasks.ci]
+description = "Run all CI tasks"
+run = [
+    { task = "rake:spec" },
+    { tasks = ["rake:standard", "zizmor"] }
+]
+
+[tasks.zizmor]
+description = "Static analysis for GitHub Actions."
+run = "zizmor ./.github"
+
+[tasks."zizmor:fix"]
+description = "Run zizmor and auto fix."
+run = "zizmor --fix=all ./.github"
+
+[tasks.rake]
+description = "Run the rake default tasks."
+run = "rake"
+
+[tasks."rake:spec"]
+description = "Run specs."
+run = "rake spec"
+
+[tasks."rake:standard"]
+description = "Run standardrb linting."
+run = "rake standard"

@@ -1,0 +1,94 @@
+# Checks Ruby's end-of-life status against the minimum required Ruby version
+# used in this library (including the vendored gem in /vendor/gems).
+#
+# When the minimum required Ruby version has reached end-of-life, this workflow
+# bumps it to the oldest still-supported Ruby release and opens a pull request.
+#
+# EOL data is sourced from https://endoflife.date/ruby
+name: Check Ruby EOL
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 12 1 * *" # First of every month at noon UTC.
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-ruby-eol:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Fetch Ruby EOL data
+        run: curl -fsSL https://endoflife.date/api/ruby.json -o /tmp/ruby-eol.json
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Check Ruby version and update if EOL
+        id: check
+        run: |
+          gemspec_file=$(find . -maxdepth 1 -name '*.gemspec' | sort | head -1)
+          
+          # Extract major.minor from the gemspec, e.g. ">= 3.2.0" → "3.2"
+          current_version=$(grep -oP '(?<=required_ruby_version = ">= )\d+\.\d+' "${gemspec_file}")
+          echo "Current minimum Ruby version: $current_version"
+
+          today=$(date +%Y-%m-%d)
+
+          # .eol is either a date string ("YYYY-MM-DD") or the boolean false
+          eol=$(jq -r --arg v "$current_version" '.[] | select(.cycle == $v) | .eol' /tmp/ruby-eol.json)
+          echo "EOL for Ruby $current_version: $eol"
+
+          # Trigger when EOL date is today or in the past; skip when eol == false (no EOL announced)
+          if [[ "$eol" != "false" && ( "$eol" < "$today" || "$eol" == "$today" ) ]]; then
+            echo "Ruby $current_version has reached end-of-life. Finding next supported version..."
+
+            # Pick the oldest cycle whose EOL is in the future (or has no EOL announced)
+            new_version=$(jq -r --arg today "$today" \
+              '[.[] | select(.eol == false or .eol > $today)] | sort_by(.cycle) | .[0].cycle' \
+              /tmp/ruby-eol.json)
+            echo "New minimum Ruby version: $new_version"
+
+            # *.gemspec  (e.g. ">= 3.2.0")
+            sed -i "s/required_ruby_version = \">= [0-9]*\.[0-9]*\.[0-9]*/required_ruby_version = \">= ${new_version}.0/" \
+              "${gemspec_file}"
+
+            # mise.toml  (ruby = "3.2")
+            sed -i "s/ruby = \"[0-9]*\.[0-9]*/ruby = \"${new_version}/" mise.toml
+
+            # .standard.yml  (ruby_version: 3.1)
+            sed -i "s/ruby_version: [0-9]*\.[0-9]*/ruby_version: ${new_version}/" .standard.yml
+
+            {
+              echo "updated=true"
+              echo "old_version=$current_version"
+              echo "new_version=$new_version"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "Ruby $current_version is still supported."
+            echo "updated=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create pull request
+        if: steps.check.outputs.updated == 'true'
+        uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0 # v8.1.0
+        with:
+          commit-message: "Bump Ruby version requirement to ${{ steps.check.outputs.new_version }}"
+          branch: "ruby-eol-bump/${{ steps.check.outputs.new_version }}"
+          base: main
+          title: "Bump Ruby version requirement to ${{ steps.check.outputs.new_version }}"
+          body: |
+            Ruby ${{ steps.check.outputs.old_version }} has reached end-of-life.
+
+            This PR bumps the minimum required Ruby version to ${{ steps.check.outputs.new_version }}.
+
+
+            > EOL data sourced from [endoflife.date](https://endoflife.date/ruby)
+          reviewers: david-uhlig
+          delete-branch: true

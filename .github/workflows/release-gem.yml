@@ -1,0 +1,41 @@
+name: Release Gem to RubyGems
+
+on:
+  workflow_dispatch:
+    inputs:
+      release-tag:
+        description: "The tag to release, e.g. `0.1.0`"
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      release-tag:
+        description: "The tag to release, e.g. `0.1.0`"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Releasing $RELEASE_TAG to RubyGems"
+        env:
+          RELEASE_TAG: ${{ inputs.release-tag }}
+
+      - name: Check out tagged commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.release-tag }}
+          persist-credentials: false
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@3ff19f5e2baf30647122352b96108b1fbe250c64 # v1.299.0
+        with:
+          bundler-cache: true # zizmor: ignore[cache-poisoning]
+
+      - name: Release to RubyGems
+        uses: rubygems/release-gem@6317d8d1f7e28c24d28f6eff169ea854948bd9f7 # v1
