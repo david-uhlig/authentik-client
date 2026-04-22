@@ -29,6 +29,10 @@ module Authentik
     #   end
     class Railtie < Rails::Railtie
       config.authentik_client = Authentik::Client.configuration
+
+      initializer "authentik_client.after_logger_initialization", after: :initialize_logger do
+        config.authentik_client.logger ||= Rails.logger
+      end
     end
   end
 end

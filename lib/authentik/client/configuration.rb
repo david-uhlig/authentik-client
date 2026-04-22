@@ -15,6 +15,8 @@ module Authentik
     #     config.token = "your-api-token"
     #   end
     class Configuration < Authentik::Api::Configuration
+      attr_writer :logger
+
       def initialize
         super
         # Override parent defaults: host is intentionally nil until the user
@@ -23,8 +25,7 @@ module Authentik
         @scheme = "https"
       end
 
-      # @return [String, nil] The API bearer token for authentication.
-      #   Alias for +access_token+.
+      # @return [String, nil] The API bearer token for authentication. Alias for +access_token+.
       def token
         access_token
       end
