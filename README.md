@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/github/license/david-uhlig/authentik-client?label=License&labelColor=343B42&color=blue)][license]
 [![Tests](https://github.com/david-uhlig/authentik-client/actions/workflows/main.yml/badge.svg)][tests]
 
-An idiomatic Ruby interface for the [authentik] API; the open-source Identity Provider (IdP) and Single Sign On (SSO) platform. 
+An idiomatic Ruby interface for the [authentik] API; the open-source Identity Provider (IdP) and Single Sign On (SSO) platform.
 
 This library lets you manage configuration objects in authentik - such as users, groups, and more - through a clean Ruby interface. It is *not* intended for handling SSO within your own application.
 
@@ -174,7 +174,6 @@ core endpoint dispatch.
 The full list of generated endpoint methods is available in the
 [auto-generated README](https://github.com/david-uhlig/authentik-api/blob/main/README_API.md) and on [api.goauthentik.io](https://api.goauthentik.io/).
 
-**Each API group is only initialized once when first requested.**
 **Each generated API group instance is initialized once and reused internally.**
 
 > [!TIP]
@@ -240,7 +239,7 @@ The gem is available as open source under the terms of the [MIT License](LICENSE
 
 ## Code of Conduct
 
-Everyone interacting in this project's codebases, issue trackers, chat rooms, and mailing lists is expected to follow the [code of conduct](https://github.com/david-uhlig/authentik-client-ruby/blob/main/CODE_OF_CONDUCT.md).
+Everyone interacting in this project's codebases, issue trackers, chat rooms, and mailing lists is expected to follow the [code of conduct](https://github.com/david-uhlig/authentik-client/blob/main/CODE_OF_CONDUCT.md).
 
 ## Attribution
 

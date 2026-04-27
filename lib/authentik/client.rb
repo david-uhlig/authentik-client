@@ -139,7 +139,7 @@ module Authentik
       # Returns the API class for a given API group.
       #
       # @param name [String, Symbol] API group name, e.g., `core`.
-      # @raise [ArgumentError] if the group is not known.
+      # @raise [KeyError] if the group is not known.
       # @return [Class] The API class for the group.
       def fetch_api_class_by_group(name)
         group_api_class_map.fetch(name.to_sym)
@@ -213,8 +213,6 @@ module Authentik
 
     # Dispatches endpoint calls directly to the corresponding generated API
     # group instance, resolved by the endpoint prefix.
-    #
-    # @raise [NoMethodError] if the name does not match any known endpoint
     def method_missing(name, ...)
       if self.class.endpoint?(name)
         group = self.class.group_by_endpoint(name)

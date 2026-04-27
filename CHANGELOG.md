@@ -10,7 +10,7 @@ client = Authentik::Client.new
 # >= 0.2.0
 client.core_users_list # preferred
 client.core.core_users_list # still works
-# previously supported (<= 0.2.0)
+# previously supported (< 0.2.0)
 client.core.users_list # not supported in >= 0.2.0
 client.core.core_users_list
 ```
@@ -21,7 +21,7 @@ Calling groups on an `Authentik::Client` instance now returns an `Authentik::Api
 client = Authentik::Client.new
 # >= 0.2.0
 client.core # => #<Authentik::Api::CoreApi ...>
-# previously (<= 0.2.0)
+# previously (< 0.2.0)
 client.core # => #<Authentik::ApiProxy ...>
 ```
 
