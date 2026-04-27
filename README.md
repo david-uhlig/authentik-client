@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/github/license/david-uhlig/authentik-client?label=License&labelColor=343B42&color=blue)][license]
 [![Tests](https://github.com/david-uhlig/authentik-client/actions/workflows/main.yml/badge.svg)][tests]
 
-An idiomatic Ruby interface for the [authentik] API; the open-source Identity Provider (IdP) and Single Sign On (SSO) platform. 
+An idiomatic Ruby interface for the [authentik] API; the open-source Identity Provider (IdP) and Single Sign On (SSO) platform.
 
 This library lets you manage configuration objects in authentik - such as users, groups, and more - through a clean Ruby interface. It is *not* intended for handling SSO within your own application.
 
@@ -15,7 +15,7 @@ Built as a developer-friendly wrapper around the auto-generated [authentik-api] 
 
 ## Installation
 
-Add the following line to your application's Gemfile: 
+Add the following line to your application's Gemfile:
 
 ```bash
 gem "authentik-client"
@@ -79,12 +79,12 @@ But you can also overwrite any globally configured attribute:
 client = Authentik::Client.new(token: "your-runtime-api-token")
 ```
 
-> [!NOTE] 
+> [!NOTE]
 > Global configuration is fully optional.
 
 #### Rails integration
 
-Alternatively, when using the gem in a Rails application, it automatically loads a [Railtie](lib/authentik/client/railtie.rb) that exposes `config.authentik_client` as a standard Rails configuration accessor. 
+Alternatively, when using the gem in a Rails application, it automatically loads a [Railtie](lib/authentik/client/railtie.rb) that exposes `config.authentik_client` as a standard Rails configuration accessor.
 
 `config.authentik_client` is the same configuration class instance as `Authentik::Client.configuration`, so both styles are always in sync.
 
@@ -96,7 +96,7 @@ module YourApplication
   class Application < Rails::Application
     # ...
     config.authentik_client.host  = "authentik.example.com"
-    config.authentik_client.token = ENV["AUTHENTIK_TOKEN"] 
+    config.authentik_client.token = ENV["AUTHENTIK_TOKEN"]
   end
 end
 ```
@@ -117,7 +117,7 @@ end
 
 #### Creating a client
 
-Finally, you can configure client instances at runtime. 
+Finally, you can configure client instances at runtime.
 
 ```ruby
 client = Authentik::Client.new(
@@ -142,30 +142,39 @@ See [`Authentik::Api::Configuration`](https://github.com/david-uhlig/authentik-a
 
 ### Calling API endpoints
 
-The client exposes each API group as a method. Calling an API group method returns a proxy object that forwards calls to the corresponding auto-generated API class, with the redundant group prefix stripped for brevity.
+The client exposes API endpoints directly as methods.
 
 ```ruby
-# Core API – lists applications.
+# Core API - lists applications.
 #
-# Calls `Authentik::Api::CoreApi.core_applications_list`.
-# Issues a `GET` request to the `/api/v3/core/applications/` endpoint, 
+# Calls `Authentik::Api::CoreApi#core_applications_list`.
+# Issues a `GET` request to the `/api/v3/core/applications/` endpoint,
 # see: https://api.goauthentik.io/reference/core-applications-list/.
-client.core.applications_list
+client.core_applications_list
 
-# Admin API – retrieves the authentik version.
-client.admin.version_retrieve
+# Core API - lists users.
+#
+# Calls `Authentik::Api::CoreApi#core_users_list`.
+client.core_users_list
 
-# OAuth2 API – lists access tokens.
-client.oauth2.access_tokens_list
+# Admin API - retrieves the authentik version.
+client.admin_version_retrieve
 
-# Propertymappings API – lists all property mappings.
-client.propertymappings.all_list
+# OAuth2 API - lists access tokens.
+client.oauth2_access_tokens_list
+
+# Propertymappings API - lists all property mappings.
+client.propertymappings_all_list
 ```
 
-The full list of API groups and their methods is available in the
+You can also access an API group object directly. For example, `client.core`
+returns the memoized `Authentik::Api::CoreApi` instance used internally for
+core endpoint dispatch.
+
+The full list of generated endpoint methods is available in the
 [auto-generated README](https://github.com/david-uhlig/authentik-api/blob/main/README_API.md) and on [api.goauthentik.io](https://api.goauthentik.io/).
 
-**Each API group is only initialized once when first requested.**
+**Each generated API group instance is initialized once and reused internally.**
 
 > [!TIP]
 > If you're primarily using one API group, you can assign it to a variable and do:
@@ -181,6 +190,7 @@ The full list of API groups and their methods is available in the
 ### Available API groups
 
 The full API reference is available at [api.goauthentik.io](https://api.goauthentik.io/).
+Each group method returns the corresponding generated API class instance.
 
 | Method                    | API class             |
 |---------------------------|-----------------------|

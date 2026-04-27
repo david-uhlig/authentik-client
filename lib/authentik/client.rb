@@ -13,9 +13,9 @@ module Authentik
   # auto-generated OpenAPI client and organizes API calls into groups that
   # correspond to the underlying API classes.
   #
-  # API groups are accessed as methods on the client. Each group returns an
-  # {ApiProxy} that forwards method calls to the corresponding OpenAPI API
-  # class, stripping the redundant API group prefix for brevity.
+  # API endpoints are accessed directly as methods on the client. The client
+  # resolves the endpoint prefix (for example, +core_+ or +admin_+) to the
+  # corresponding auto-generated OpenAPI API class.
   #
   # New API groups added to the underlying OpenAPI client are automatically
   # discovered and available without changes to this class.
@@ -35,40 +35,146 @@ module Authentik
   #   )
   #
   # @example List all applications
-  #   client.core.applications_list
+  #   client.core_applications_list
   #
   # @example Get the admin version
-  #   client.admin.version_retrieve
+  #   client.admin_version_retrieve
   #
   # @example List OAuth2 access tokens
-  #   client.oauth2.access_tokens_list
+  #   client.oauth2_access_tokens_list
   class Client
-    # Yields the global {Configuration} object so that settings can be applied
-    # at startup (e.g., in a Rails initializer).
-    #
-    # @example
-    #   Authentik::Client.configure do |config|
-    #     config.host  = "authentik.example.com"
-    #     config.token = "your-api-token"
-    #   end
-    #
-    # @yieldparam config [Configuration]
-    def self.configure
-      yield(configuration)
-    end
+    RESOURCE_ACTIONS = %w[list retrieve create update partial_update destroy].freeze
 
-    # Returns the global {Configuration} instance, creating it on first call.
-    #
-    # @return [Configuration]
-    def self.configuration
-      @configuration ||= Configuration.new
-    end
+    class NoEndpointError < NoMethodError; end
 
-    # Resets the global configuration to a fresh {Configuration} instance.
-    #
-    # @return [Configuration]
-    def self.reset_configuration!
-      @configuration = Configuration.new
+    class << self
+      # Yields the global {Configuration} object so that settings can be applied
+      # at startup (e.g., in a Rails initializer).
+      #
+      # @example
+      #   Authentik::Client.configure do |config|
+      #     config.host  = "authentik.example.com"
+      #     config.token = "your-api-token"
+      #   end
+      #
+      # @yieldparam config [Configuration]
+      def configure
+        yield(configuration)
+      end
+
+      # Returns the global {Configuration} instance, creating it on the first call.
+      #
+      # @return [Configuration]
+      def configuration
+        @configuration ||= Configuration.new
+      end
+
+      # Resets the global configuration to a fresh {Configuration} instance.
+      #
+      # @return [Configuration]
+      def reset_configuration!
+        @configuration = Configuration.new
+      end
+
+      # Returns true if `name` is an API group.
+      #
+      # @param name [String, Symbol] Group name identifier, e.g., `core`.
+      # @return [Boolean] True if an API group of `name` exists.
+      def group?(name)
+        groups.include?(name.downcase.to_sym)
+      end
+
+      # Returns all known API groups.
+      #
+      # @return [Array<Symbol>]
+      def groups
+        group_api_class_map.keys
+      end
+
+      # Returns true if `name` is a known resource.
+      #
+      # A resource is a collection of API endpoints that share a common prefix.
+      # For example, `:core_users` is the resource for `:core_users_list`,
+      # `:core_users_retrieve`, etc.
+      #
+      # @param name [String, Symbol] Resource name identifier, e.g., `core_users`
+      # @return [Boolean] True if a resource of `name` exists.
+      def resource?(name)
+        resources.include?(name.to_sym)
+      end
+
+      # Returns all known API resources.
+      def resources
+        @resources ||= begin
+          remove_action_regexp = /(.*?)(_(#{RESOURCE_ACTIONS.join("|")}))?(_with_http_info)?$/
+          endpoints
+            .map { |endpoint| endpoint.to_s.gsub(remove_action_regexp, '\1').to_sym }
+            .uniq
+        end
+      end
+
+      # Returns true if `name` is a known endpoint.
+      #
+      # @param name [String, Symbol] Endpoint name identifier, e.g., `core_users_list`.
+      # @return [Boolean] True if `name` is a known endpoint.
+      def endpoint?(name)
+        endpoints.include?(name.to_sym)
+      end
+
+      # Returns all known API endpoints.
+      #
+      # @return [Array<Symbol>]
+      def endpoints
+        endpoint_group_map.keys
+      end
+
+      # Returns the API group for a given endpoint.
+      #
+      # @param name [String, Symbol] Endpoint name identifier, e.g., `core_users_list`.
+      # @return [Symbol, nil] The API group for the endpoint, or nil if not found.
+      def group_by_endpoint(name)
+        endpoint_group_map[name.to_sym]
+      end
+
+      # Returns the API class for a given API group.
+      #
+      # @param name [String, Symbol] API group name, e.g., `core`.
+      # @raise [KeyError] if the group is not known.
+      # @return [Class] The API class for the group.
+      def fetch_api_class_by_group(name)
+        group_api_class_map.fetch(name.to_sym)
+      end
+
+      private
+
+      def endpoint_group_map
+        @endpoint_group_map ||= group_api_class_map.each_with_object({}) do |(group, api_class), map|
+          group_prefix = "#{group}_"
+          api_class.public_instance_methods(false).each do |method_name|
+            next unless method_name.start_with?(group_prefix)
+            map[method_name] = group
+          end
+        end
+      end
+
+      # Returns a hash mapping API group name to API class.
+      #
+      # Automatically discovers all classes in +Authentik::Api+ that end in
+      # +"Api"+.
+      #
+      # @return [Hash{Symbol => Class}]
+      def group_api_class_map
+        @group_api_class_map ||= Authentik::Api.constants
+          .select { |c| c.to_s.end_with?("Api") }
+          .filter_map do |c|
+            klass = Authentik::Api.const_get(c)
+            next unless klass.is_a?(Class)
+
+            base = c.to_s.delete_suffix("Api").downcase
+            [base.to_sym, klass]
+        end
+          .to_h
+      end
     end
 
     # @param host [String, nil] The authentik server hostname
@@ -105,42 +211,21 @@ module Authentik
       @api_instances = {}
     end
 
-    # Provides access to an API group by name. Returns an {ApiProxy} that
-    # wraps the corresponding OpenAPI API class instance.
-    #
-    # The method name is the API class name (without the +"Api"+ suffix)
-    # in lowercase. For example, +:core+ maps to +CoreApi+, +:admin+ to
-    # +AdminApi+, and +:oauth2+ to +OAuth2Api+.
-    #
-    # @return [ApiProxy] A proxy wrapping the underlying API class instance
-    # @raise [NoMethodError] if the name does not match any known API group
+    # Dispatches endpoint calls directly to the corresponding generated API
+    # group instance, resolved by the endpoint prefix.
     def method_missing(name, ...)
-      api_info = self.class.api_map[name]
-      return super unless api_info
-
-      @api_instances[name] ||= ApiProxy.new(api_info[:klass].new(@api_client), api_info[:prefix])
+      if self.class.endpoint?(name)
+        group = self.class.group_by_endpoint(name)
+        api_group_instance(group).public_send(name, ...)
+      elsif self.class.group?(name)
+        api_group_instance(name)
+      else
+        super
+      end
     end
 
     def respond_to_missing?(name, include_private = false)
-      self.class.api_map.key?(name) || super
-    end
-
-    # Returns a hash mapping API group name symbols to their API class and
-    # prefix. Automatically discovers all classes in +Authentik::Api+
-    # that end with +"Api"+.
-    #
-    # @return [Hash{Symbol => Hash}]
-    def self.api_map
-      @api_map ||= Authentik::Api.constants
-        .select { |c| c.to_s.end_with?("Api") }
-        .filter_map do |c|
-          klass = Authentik::Api.const_get(c)
-          next unless klass.is_a?(Class)
-
-          base = c.to_s.delete_suffix("Api").downcase
-          [base.to_sym, {klass: klass, prefix: "#{base}_"}]
-      end
-        .to_h
+      self.class.group?(name) || self.class.endpoint?(name) || super
     end
 
     private
@@ -152,6 +237,11 @@ module Authentik
       config.scheme = scheme
       options.each { |k, v| config.public_send(:"#{k}=", v) if config.respond_to?(:"#{k}=") }
       Authentik::Api::ApiClient.new(config)
+    end
+
+    def api_group_instance(group)
+      api_class = self.class.fetch_api_class_by_group(group)
+      @api_instances[group] ||= api_class.new(@api_client)
     end
   end
 end
