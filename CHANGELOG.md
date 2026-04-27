@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## 0.2.0
+
 ### Breaking
 
 #### Removed the `Authentik::ApiProxy` class.
