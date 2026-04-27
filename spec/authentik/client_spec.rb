@@ -125,50 +125,89 @@ RSpec.describe Authentik::Client do
     end
   end
 
-  describe "API group access" do
-    it "returns an ApiProxy for a known API group" do
-      expect(client.core).to be_a(Authentik::ApiProxy)
+  describe "endpoint access" do
+    it "dispatches known endpoints to their generated API class" do
+      fake_core_api = double("fake_core_api")
+      allow(fake_core_api).to receive(:core_users_list).and_return(:ok)
+      allow(Authentik::Api::CoreApi).to receive(:new).and_return(fake_core_api)
+
+      expect(client.core_users_list).to eq(:ok)
     end
 
-    it "returns the same instance on repeated access" do
-      expect(client.core).to equal(client.core)
+    it "reuses the same API class instance for repeated calls in the same group" do
+      fake_core_api = double("fake_core_api", core_users_list: :users, core_groups_list: :groups)
+      allow(Authentik::Api::CoreApi).to receive(:new).and_return(fake_core_api)
+
+      expect(client.core_users_list).to eq(:users)
+      expect(client.core_groups_list).to eq(:groups)
+      expect(Authentik::Api::CoreApi).to have_received(:new).once
     end
 
-    it "responds to all expected API group names" do
-      %i[admin authenticators core crypto enterprise events flows managed
-        oauth2 outposts policies propertymappings providers rac rbac root
-        schema sources ssf stages tasks tenants].each do |group|
-        expect(client).to respond_to(group), "expected client to respond to :#{group}"
+    it "responds to every discovered endpoint" do
+      described_class.endpoints.each do |endpoint|
+        expect(client).to respond_to(endpoint), "expected client to respond to :#{endpoint}"
       end
     end
 
-    it "raises NoMethodError for unknown API groups" do
-      expect { client.nonexistent_api }.to raise_error(NoMethodError)
+    it "raises NoMethodError for unknown endpoints" do
+      expect { client.nonexistent_endpoint }.to raise_error(NoMethodError)
     end
 
-    it "does not respond to unknown API group names" do
-      expect(client).not_to respond_to(:nonexistent_api)
+    it "exposes API groups" do
+      expect(client).to respond_to(:core)
     end
   end
 
-  describe ".api_map" do
-    subject(:api_map) { described_class.api_map }
-
-    it "contains known API groups" do
-      expect(api_map.keys).to include(:core, :admin, :oauth2, :propertymappings)
+  describe "API discovery helpers" do
+    describe ".group?" do
+      it "accepts symbols and strings case-insensitively" do
+        expect(described_class.group?(:core)).to be(true)
+        expect(described_class.group?("CORE")).to be(true)
+        expect(described_class.group?("missing")).to be(false)
+      end
     end
 
-    it "maps group names to the correct API classes" do
-      expect(api_map[:core][:klass]).to eq(Authentik::Api::CoreApi)
-      expect(api_map[:admin][:klass]).to eq(Authentik::Api::AdminApi)
-      expect(api_map[:oauth2][:klass]).to eq(Authentik::Api::Oauth2Api)
+    describe ".resources and .resource?" do
+      before do
+        described_class.remove_instance_variable(:@resources) if described_class.instance_variable_defined?(:@resources)
+        allow(described_class).to receive(:endpoints).and_return(
+          %i[
+            core_users_list
+            core_users_retrieve
+            core_users_list_with_http_info
+            admin_version_retrieve
+            admin_version_retrieve_with_http_info
+          ]
+        )
+      end
+
+      it "normalizes endpoint names to unique resource names" do
+        expect(described_class.resources).to match_array(%i[core_users admin_version])
+      end
+
+      it "checks resource existence by symbol or string" do
+        expect(described_class.resource?(:core_users)).to be(true)
+        expect(described_class.resource?("admin_version")).to be(true)
+        expect(described_class.resource?("core_groups")).to be(false)
+      end
     end
 
-    it "sets the correct prefix for each group" do
-      expect(api_map[:core][:prefix]).to eq("core_")
-      expect(api_map[:admin][:prefix]).to eq("admin_")
-      expect(api_map[:oauth2][:prefix]).to eq("oauth2_")
-      expect(api_map[:propertymappings][:prefix]).to eq("propertymappings_")
+    describe ".endpoints" do
+      it "includes only methods matching each API group prefix" do
+        described_class.remove_instance_variable(:@endpoint_group_map) if described_class.instance_variable_defined?(:@endpoint_group_map)
+
+        fake_api_map = {
+          fake: Class.new do
+            def fake_users_list = nil
+            def fake_groups_retrieve = nil
+            def not_fake_method = nil
+          end
+        }
+
+        allow(described_class).to receive(:group_api_class_map).and_return(fake_api_map)
+
+        expect(described_class.endpoints).to match_array(%i[fake_users_list fake_groups_retrieve])
+      end
     end
   end
 end
