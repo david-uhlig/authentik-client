@@ -1,5 +1,6 @@
 [tools]
 ruby = "3.3"
+zizmor = "latest"
 
 [tasks.ci]
 description = "Run all CI tasks"
